@@ -43,31 +43,31 @@ def play_video(file_path):
             # If we press q, the video will close, if not, the video continues until his end
             break
         
-def save_edited_image(image, name="edited_image.jpg"):
-    cv2.imwrite('resources/' + name, image)
+def save_edited_image(image, file_path):
+    cv2.imwrite(file_path, image)
     print(f"Edited image saved to {file_path}")
 
-#def apply_filter_blur(file_path):
-#    image = cv2.imread(file_path)
-#    blurred_image = cv2.GaussianBlur(image, (15, 15), 0)
-#    cv2.imshow("Blurred Image", blurred_image)
-#    return blurred_image
+def save_edited_video(frames, file_path, fps=30):
+    if not frames:
+        print("No frames to save.")
+        return
+    height, width = frames[0].shape[:2]
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(file_path, fourcc, fps, (width, height))
+    for frame in frames:
+        out.write(frame)
+    out.release()
+    print(f"Edited video saved to {file_path}")
 
-#def apply_filter_sharpness(file_path):
-#    image = cv2.imread(file_path)
-#    kernel = np.array([[0, -1, 0], 
-#                       [-1, 5,-1], 
-#                       [0, -1, 0]])
-#    sharp_image = cv2.filter2D(image, -1, kernel)
-#    cv2.imshow("Sharpness Filtered Image", sharp_image)
-#    return sharp_image
-
-#def apply_channel_swap(file_path):
-#    image = cv2.imread(file_path)
-#    swapped_image = image.copy()
-#    swapped_image[:, :, [0, 2]] = swapped_image[:, :, [2, 0]]  # Swap Blue and Red channels
-#    cv2.imshow("Channel Swapped Image", swapped_image)
-#    return swapped_image
+def ask_save_and_overwrite(image_or_frames, file_path, is_video=False, fps=30):
+    save = input("Deseja salvar a alteração e sobrescrever o arquivo original? (s/n): ").strip().lower()
+    if save == 's':
+        if is_video:
+            save_edited_video(image_or_frames, file_path, fps)
+        else:
+            save_edited_image(image_or_frames, file_path)
+    else:
+        print("Alteração descartada.")
 
 def detect_file_type(file_path):
     img = cv2.imread(file_path)
@@ -80,124 +80,129 @@ def detect_file_type(file_path):
     cap.release()
     return "unknown"
 
-def apply_filter_blur(file_path):
+def show_channel(image, channel):
+    if channel == 'r':
+        red_img = np.zeros_like(image)
+        red_img[:, :, 2] = image[:, :, 2]
+        return red_img
+    elif channel == 'g':
+        green_img = np.zeros_like(image)
+        green_img[:, :, 1] = image[:, :, 1]
+        return green_img
+    elif channel == 'b':
+        blue_img = np.zeros_like(image)
+        blue_img[:, :, 0] = image[:, :, 0]
+        return blue_img
+    elif channel == 'gray':
+        gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        return cv2.cvtColor(gray_img, cv2.COLOR_GRAY2BGR)
+    else:
+        return image
+
+def apply_filter_blur(file_path, channel_mode):
     file_type = detect_file_type(file_path)
     if file_type == "image":
         image = cv2.imread(file_path)
+        if channel_mode in ['r', 'g', 'b', 'gray']:
+            image = show_channel(image, channel_mode)
         blurred_image = cv2.GaussianBlur(image, (15, 15), 0)
         cv2.imshow("Blurred Image", blurred_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+        ask_save_and_overwrite(blurred_image, file_path)
     elif file_type == "video":
         cap = cv2.VideoCapture(file_path)
+        frames = []
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
+            if channel_mode in ['r', 'g', 'b', 'gray']:
+                frame = show_channel(frame, channel_mode)
             blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
+            frames.append(blurred_frame)
             cv2.imshow("Blurred Video", blurred_frame)
             if cv2.waitKey(30) & 0xFF == ord('q'):
                 break
         cap.release()
         cv2.destroyAllWindows()
+        ask_save_and_overwrite(frames, file_path, is_video=True, fps=fps)
     else:
         print("Unsupported file type.")
-        
-def apply_filter_sharpness(file_path):
+
+def apply_filter_sharpness(file_path, channel_mode):
     file_type = detect_file_type(file_path)
     kernel = np.array([[0, -1, 0], 
                        [-1, 5,-1], 
                        [0, -1, 0]])
     if file_type == "image":
         image = cv2.imread(file_path)
+        if channel_mode in ['r', 'g', 'b', 'gray']:
+            image = show_channel(image, channel_mode)
         sharp_image = cv2.filter2D(image, -1, kernel)
         cv2.imshow(f"Sharpened Image - {os.path.basename(file_path)}", sharp_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+        ask_save_and_overwrite(sharp_image, file_path)
     elif file_type == "video":
         cap = cv2.VideoCapture(file_path)
+        frames = []
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
+            if channel_mode in ['r', 'g', 'b', 'gray']:
+                frame = show_channel(frame, channel_mode)
             sharp_frame = cv2.filter2D(frame, -1, kernel)
+            frames.append(sharp_frame)
             cv2.imshow(f"Sharpened Video - {os.path.basename(file_path)}", sharp_frame)
             if cv2.waitKey(30) & 0xFF == ord('q'):
                 break
         cap.release()
         cv2.destroyAllWindows()
+        ask_save_and_overwrite(frames, file_path, is_video=True, fps=fps)
     else:
         print(f"Unsupported file type for {file_path}.")
-        
-def apply_channel_swapl(file_path):
+
+def apply_channel_swapl(file_path, channel_mode):
     file_type = detect_file_type(file_path)
     if file_type == "image":
         image = cv2.imread(file_path)
-        print("Channel options:")
-        print("1. Apply to entire image (swap R and B)")
-        print("2. Show only Red channel")
-        print("3. Show only Green channel")
-        print("4. Show only Blue channel")
-        print("5. Show only Grey Scale channel")
-        channel_choice = input("Choose an option (1-5): ")
-        if channel_choice == '1':
+        if channel_mode == 'swap':
             swapped_image = image.copy()
             swapped_image[:, :, [0, 2]] = swapped_image[:, :, [2, 0]]
             cv2.imshow(f"Channel Swapped Image - {os.path.basename(file_path)}", swapped_image)
-        elif channel_choice == '2':
-            red_channel = image[:, :, 2]
-            red_img = np.zeros_like(image)
-            red_img[:, :, 2] = red_channel
-            cv2.imshow(f"Red Channel - {os.path.basename(file_path)}", red_img)
-        elif channel_choice == '3':
-            green_channel = image[:, :, 1]
-            green_img = np.zeros_like(image)
-            green_img[:, :, 1] = green_channel
-            cv2.imshow(f"Green Channel - {os.path.basename(file_path)}", green_img)
-        elif channel_choice == '4':
-            blue_channel = image[:, :, 0]
-            blue_img = np.zeros_like(image)
-            blue_img[:, :, 0] = blue_channel
-            cv2.imshow(f"Blue Channel - {os.path.basename(file_path)}", blue_img)
-        elif channel_choice == '6':
-            grey_img = cv2.cvtColor(grey_channel, cv2.COLOR_BGR2GRAY)
-            cv2.imshow(f"Grey Scale Channel - {os.path.basename(file_path)}", grey_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            ask_save_and_overwrite(swapped_image, file_path)
+        elif channel_mode in ['r', 'g', 'b', 'gray']:
+            channel_img = show_channel(image, channel_mode)
+            cv2.imshow(f"Channel {channel_mode.upper()} - {os.path.basename(file_path)}", channel_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            ask_save_and_overwrite(channel_img, file_path)
         else:
             print("Invalid channel option.")
             return
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
     elif file_type == "video":
-        print("Channel options:")
-        print("1. Apply to entire video (swap R and B)")
-        print("2. Show only Red channel")
-        print("3. Show only Green channel")
-        print("4. Show only Blue channel")
-        channel_choice = input("Choose an option (1-4): ")
         cap = cv2.VideoCapture(file_path)
+        frames = []
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            if channel_choice == '1':
+            if channel_mode == 'swap':
                 swapped_frame = frame.copy()
                 swapped_frame[:, :, [0, 2]] = swapped_frame[:, :, [2, 0]]
+                frames.append(swapped_frame)
                 cv2.imshow(f"Channel Swapped Video - {os.path.basename(file_path)}", swapped_frame)
-            elif channel_choice == '2':
-                red_channel = frame[:, :, 2]
-                red_img = np.zeros_like(frame)
-                red_img[:, :, 2] = red_channel
-                cv2.imshow(f"Red Channel Video - {os.path.basename(file_path)}", red_img)
-            elif channel_choice == '3':
-                green_channel = frame[:, :, 1]
-                green_img = np.zeros_like(frame)
-                green_img[:, :, 1] = green_channel
-                cv2.imshow(f"Green Channel Video - {os.path.basename(file_path)}", green_img)
-            elif channel_choice == '4':
-                blue_channel = frame[:, :, 0]
-                blue_img = np.zeros_like(frame)
-                blue_img[:, :, 0] = blue_channel
-                cv2.imshow(f"Blue Channel Video - {os.path.basename(file_path)}", blue_img)
+            elif channel_mode in ['r', 'g', 'b', 'gray']:
+                channel_img = show_channel(frame, channel_mode)
+                frames.append(channel_img)
+                cv2.imshow(f"Channel {channel_mode.upper()} Video - {os.path.basename(file_path)}", channel_img)
             else:
                 print("Invalid channel option.")
                 break
@@ -205,25 +210,29 @@ def apply_channel_swapl(file_path):
                 break
         cap.release()
         cv2.destroyAllWindows()
+        ask_save_and_overwrite(frames, file_path, is_video=True, fps=fps)
     else:
         print(f"Unsupported file type for {file_path}.")
 
-def apply_addition(img1_path, img2_path):
+def apply_addition(img1_path, img2_path, channel_mode):
     img1 = cv2.imread(img1_path)
     img2 = cv2.imread(img2_path)
     if img1 is None or img2 is None:
         print("One or both images could not be loaded.")
         return
-    # Resize to smallest common size
     min_shape = (min(img1.shape[0], img2.shape[0]), min(img1.shape[1], img2.shape[1]))
     img1_resized = cv2.resize(img1, (min_shape[1], min_shape[0]))
     img2_resized = cv2.resize(img2, (min_shape[1], min_shape[0]))
+    if channel_mode in ['r', 'g', 'b', 'gray']:
+        img1_resized = show_channel(img1_resized, channel_mode)
+        img2_resized = show_channel(img2_resized, channel_mode)
     added = cv2.add(img1_resized, img2_resized)
     cv2.imshow("Addition Result", added)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    ask_save_and_overwrite(added, img1_path)
 
-def apply_subtract(img1_path, img2_path):
+def apply_subtract(img1_path, img2_path, channel_mode):
     img1 = cv2.imread(img1_path)
     img2 = cv2.imread(img2_path)
     if img1 is None or img2 is None:
@@ -232,12 +241,16 @@ def apply_subtract(img1_path, img2_path):
     min_shape = (min(img1.shape[0], img2.shape[0]), min(img1.shape[1], img2.shape[1]))
     img1_resized = cv2.resize(img1, (min_shape[1], min_shape[0]))
     img2_resized = cv2.resize(img2, (min_shape[1], min_shape[0]))
+    if channel_mode in ['r', 'g', 'b', 'gray']:
+        img1_resized = show_channel(img1_resized, channel_mode)
+        img2_resized = show_channel(img2_resized, channel_mode)
     subtracted = cv2.subtract(img1_resized, img2_resized)
     cv2.imshow("Subtraction Result", subtracted)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    ask_save_and_overwrite(subtracted, img1_path)
 
-def apply_blending(img1_path, img2_path, alpha=0.5):
+def apply_blending(img1_path, img2_path, alpha=0.5, channel_mode='all'):
     img1 = cv2.imread(img1_path)
     img2 = cv2.imread(img2_path)
     if img1 is None or img2 is None:
@@ -246,25 +259,51 @@ def apply_blending(img1_path, img2_path, alpha=0.5):
     min_shape = (min(img1.shape[0], img2.shape[0]), min(img1.shape[1], img2.shape[1]))
     img1_resized = cv2.resize(img1, (min_shape[1], min_shape[0]))
     img2_resized = cv2.resize(img2, (min_shape[1], min_shape[0]))
+    if channel_mode in ['r', 'g', 'b', 'gray']:
+        img1_resized = show_channel(img1_resized, channel_mode)
+        img2_resized = show_channel(img2_resized, channel_mode)
     beta = 1.0 - alpha
     blended = cv2.addWeighted(img1_resized, alpha, img2_resized, beta, 0)
     cv2.imshow("Blending Result", blended)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    ask_save_and_overwrite(blended, img1_path)
 
 while True:
-    print("Select an option:")
+    print("\nSelecione o modo de canal para aplicar os filtros:")
+    print("1. Imagem inteira (RGB)")
+    print("2. Escala de cinza (Grayscale)")
+    print("3. Apenas canal Vermelho (R)")
+    print("4. Apenas canal Verde (G)")
+    print("5. Apenas canal Azul (B)")
+    channel_option = input("Escolha uma opção (1-5): ")
+
+    if channel_option == '1':
+        channel_mode = 'all'
+    elif channel_option == '2':
+        channel_mode = 'gray'
+    elif channel_option == '3':
+        channel_mode = 'r'
+    elif channel_option == '4':
+        channel_mode = 'g'
+    elif channel_option == '5':
+        channel_mode = 'b'
+    else:
+        print("Opção inválida.")
+        continue
+
+    print("\nSelecione uma operação:")
     print("1. Upload an image")
     print("2. Record a video from webcam")
     print("3. Play a video from file")
-    print("4. Apply blur filter to uploaded image")
-    print("5. Apply sharpness filter to uploaded image")
-    print("6. Apply channel swap filter to uploaded image")
+    print("4. Apply blur filter")
+    print("5. Apply sharpness filter")
+    print("6. Apply 5channel swap filter (swap R/B ou mostrar canal)")
     print("7. Addition of two images")
     print("8. Subtraction of two images")
     print("9. Blending of two images")
     print("10. Exit")
-    
+
     choice = input("Enter your choice (1-10): ")
     if choice == '1':
         image_path = input("Enter the image file path: ")
@@ -287,7 +326,7 @@ while True:
             selected_file = input("Enter the file name to apply blur filter: ")
             file_path = os.path.join("resources/", selected_file)
             if os.path.exists(file_path):
-                apply_filter_blur(file_path)
+                apply_filter_blur(file_path, channel_mode)
             else:
                 print("File not found.")
         else:
@@ -301,7 +340,7 @@ while True:
             selected_file = input("Enter the file name to apply sharpness filter: ")
             file_path = os.path.join("resources/", selected_file)
             if os.path.exists(file_path):
-                apply_filter_sharpness(file_path)
+                apply_filter_sharpness(file_path, channel_mode)
             else:
                 print("File not found.")
         else:
@@ -315,13 +354,15 @@ while True:
             selected_file = input("Enter the file name to apply channel swap/filter: ")
             file_path = os.path.join("resources/", selected_file)
             if os.path.exists(file_path):
-                apply_channel_swapl(file_path)
+                if channel_mode == 'all':
+                    apply_channel_swapl(file_path, 'swap')
+                else:
+                    apply_channel_swapl(file_path, channel_mode)
             else:
                 print("File not found.")
         else:
             print("No images or videos found in resources folder.")
     elif choice == '7':
-        # Addition
         files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
         if len(files) >= 2:
             print("Available images for addition:")
@@ -332,13 +373,12 @@ while True:
             img1_path = os.path.join("resources/", img1)
             img2_path = os.path.join("resources/", img2)
             if os.path.exists(img1_path) and os.path.exists(img2_path):
-                apply_addition(img1_path, img2_path)
+                apply_addition(img1_path, img2_path, channel_mode)
             else:
                 print("One or both files not found.")
         else:
             print("Not enough images in resources folder.")
     elif choice == '8':
-        # Subtraction
         files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
         if len(files) >= 2:
             print("Available images for subtraction:")
@@ -349,13 +389,12 @@ while True:
             img1_path = os.path.join("resources/", img1)
             img2_path = os.path.join("resources/", img2)
             if os.path.exists(img1_path) and os.path.exists(img2_path):
-                apply_subtract(img1_path, img2_path)
+                apply_subtract(img1_path, img2_path, channel_mode)
             else:
                 print("One or both files not found.")
         else:
             print("Not enough images in resources folder.")
     elif choice == '9':
-        # Blending
         files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
         if len(files) >= 2:
             print("Available images for blending:")
@@ -370,7 +409,7 @@ while True:
             img1_path = os.path.join("resources/", img1)
             img2_path = os.path.join("resources/", img2)
             if os.path.exists(img1_path) and os.path.exists(img2_path):
-                apply_blending(img1_path, img2_path, alpha)
+                apply_blending(img1_path, img2_path, alpha, channel_mode)
             else:
                 print("One or both files not found.")
         else:
