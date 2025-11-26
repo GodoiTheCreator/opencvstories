@@ -1,79 +1,82 @@
-# OpenCVStories
+# OpenCV Stories
 
-A simple interactive Python application for image and video processing using OpenCV. This project allows you to:
+OpenCV Stories is a Python application for image and video processing, offering a suite of filters, effects, and editing tools. It features both a command-line interface (CLI) and a user-friendly Graphical User Interface (GUI) built with Tkinter.
 
--   Apply filters (blur, sharpness, channel swap, grayscale, and color channel selection) to images and videos
--   Perform arithmetic operations (addition, subtraction, blending) between two images
--   Add stickers (with transparency) to images by clicking to position them
--   Record videos from your webcam and choose whether to save them
--   Play videos and upload images
+## 📋 Project Overview
 
-## Features
+This project demonstrates the power of OpenCV for real-time media manipulation. Users can upload images, record videos, apply various filters (blur, sharpen, channel swap), perform arithmetic operations on images, and add stickers.
 
-### Filters
-
--   **Blur**: Apply Gaussian blur to images or videos
--   **Sharpness**: Apply a sharpening filter
--   **Channel Swap**: Swap R/B channels or show only a specific channel (R, G, B, or grayscale)
--   **Channel Selection**: Choose to apply filters to the whole image, grayscale, or a single color channel
-
-### Arithmetic Operations
-
--   **Addition**: Add two images pixel-wise
--   **Subtraction**: Subtract one image from another pixel-wise
--   **Blending**: Blend two images with a custom alpha
-
-### Stickers
-
--   Choose from up to 5 PNG stickers (with alpha channel) in the `stickers/` folder
--   Click on the image to position the sticker (multiple times if desired)
--   Press `s` to save, `r` to choose another sticker, or `q` to cancel
-
-### Video
-
--   Record video from your webcam and choose to save or discard
--   Play video files from the `resources/` folder
-
-## How to Use
-
-1. **Install requirements**
-
-    ```bash
-    pip install opencv-python numpy
-    ```
-
-2. **Prepare folders**
-
-    - Place your images and videos in the `resources/` folder
-    - Place up to 5 PNG stickers (with transparency) in the `stickers/` folder
-
-3. **Run the application**
-
-    ```bash
-    python main.py
-    ```
-
-4. **Follow the menu prompts**
-    - Select channel mode (whole image, grayscale, R, G, or B)
-    - Choose an operation (filter, arithmetic, sticker, etc.)
-    - For stickers, click to position, then press `s` to save, `r` to restart, or `q` to cancel
-    - For video recording, press `q` to stop and then choose to save or discard
-
-## File Structure
+## 📂 Project Structure
 
 ```
-main.py
-resources/   # Place your images and videos here
-stickers/    # Place your PNG stickers here (with alpha channel)
+opencvstories/
+├── main.py              # Core logic and CLI implementation
+├── gui.py               # Graphical User Interface (Tkinter)
+├── requirements.txt     # Project dependencies
+├── README.md            # Project documentation
+├── resources/           # Directory for saving/loading media
+└── stickers/            # Directory for sticker images (PNGs)
 ```
 
-## Notes
+## 🛠 Installation
 
--   Only PNG stickers with an alpha channel are supported
--   All changes can be saved or discarded after previewing
--   For arithmetic operations, images are resized to the smallest common size
--   The program is fully interactive via the console and OpenCV windows
+1.  **Prerequisites**: Ensure Python 3.x is installed.
+2.  **Install Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *Note: On macOS, you may need to install `python-tk` via Homebrew if you encounter Tkinter issues.*
 
-## License
+## 🚀 Usage
 
-MIT License
+### Graphical User Interface (Recommended)
+Run the GUI to access all features in a windowed environment:
+```bash
+python3 gui.py
+```
+
+**Features:**
+*   **File Operations**: Load images/videos or record from webcam.
+*   **Channel Modes**: View specific color channels (RGB, Gray, Red, Green, Blue).
+*   **Filters**: Apply Blur, Sharpen, or Channel Swap effects.
+*   **Stickers**: Interactively place stickers on images.
+*   **Arithmetic**: Add, Subtract, or Blend two images together.
+
+### Command Line Interface
+Run the script directly to use the interactive menu in the terminal:
+```bash
+python3 main.py
+```
+
+## 💻 Code Documentation
+
+### `main.py`
+Contains the core image processing functions.
+
+**Key Functions:**
+*   `upload_image(file_path)`: Loads an image from disk.
+*   `record_video(interactive=True)`: Captures video from the webcam.
+*   `apply_filter_blur(file_path, channel_mode)`: Applies Gaussian blur.
+*   `apply_filter_sharpness(file_path, channel_mode)`: Applies a sharpening kernel.
+*   `overlay_sticker(base_img, sticker, pos)`: Overlays a transparent PNG sticker onto a base image at a specific position, handling clipping and transparency.
+*   `apply_blending(...)`: Blends two images with a specified alpha value.
+
+### `gui.py`
+Implements the Tkinter GUI.
+
+**Class: `OpenCVStoriesApp`**
+*   **`__init__`**: Initializes the main window and widgets.
+*   **`create_widgets`**: Sets up the layout (buttons, canvas, status bar).
+*   **`show_image_window`**: Helper method to display processed images in a separate window with "Save" and "Close" options.
+*   **`add_sticker`**: Opens a dedicated window for interactive sticker placement using mouse clicks.
+*   **`preview_file`**: Renders the current image or video frame on the main canvas.
+
+## 🎨 GUI Details
+
+The GUI is designed for simplicity:
+*   **Control Panel**: Top section containing buttons for file loading, recording, and channel selection.
+*   **Action Bar**: Buttons for applying filters and effects.
+*   **Canvas**: Central area displaying the currently loaded media.
+*   **Status Bar**: Bottom bar showing current status and instructions.
+
+When applying effects, a new window opens to show the result, allowing you to compare with the original before saving.
