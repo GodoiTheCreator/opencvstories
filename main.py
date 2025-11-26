@@ -11,36 +11,44 @@ def upload_image(file_path):
     return image
 
 def record_video():
-    video = cv2.VideoCapture(0) # Captures video from the default camera
+    video = cv2.VideoCapture(0)
     frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = video.get(cv2.CAP_PROP_FPS)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # four-character code used to identify data formats, in this case video codec
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter('resources/video.mp4', fourcc, fps, (frame_width, frame_height))
-    
+    frames = []
+
     while True:
         ret, frame = video.read()
         if not ret:
             break
         out.write(frame)
+        frames.append(frame.copy())
         cv2.imshow('Recording Video', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-    
-    # Release everything if job is finished
+
     video.release()
     out.release()
     cv2.destroyAllWindows()
+
+    save = input("Do you want to save the recorded video? (y/n): ").strip().lower()
+    if save != 'y':
+        try:
+            os.remove('resources/video.mp4')
+            print("Video discarded.")
+        except Exception:
+            print("Could not remove the video file.")
+    else:
+        print("Video saved as resources/video.mp4")
 
 def play_video(file_path):
     video = cv2.VideoCapture(file_path)
     while True:
         success, img = video.read()
-        # The images will be saved in img, and success will tell us if this worked, as a boolean variable, true or false
         cv2.imshow("Video", img)
-        # This show all images
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            # If we press q, the video will close, if not, the video continues until his end
             break
         
 def save_edited_image(image, file_path):
@@ -60,14 +68,14 @@ def save_edited_video(frames, file_path, fps=30):
     print(f"Edited video saved to {file_path}")
 
 def ask_save_and_overwrite(image_or_frames, file_path, is_video=False, fps=30):
-    save = input("Deseja salvar a alteração e sobrescrever o arquivo original? (s/n): ").strip().lower()
-    if save == 's':
+    save = input("Do you want to save the changes and overwrite the original file? (y/n): ").strip().lower()
+    if save == 'y':
         if is_video:
             save_edited_video(image_or_frames, file_path, fps)
         else:
             save_edited_image(image_or_frames, file_path)
     else:
-        print("Alteração descartada.")
+        print("Changes discarded.")
 
 def detect_file_type(file_path):
     img = cv2.imread(file_path)
@@ -271,100 +279,108 @@ def apply_blending(img1_path, img2_path, alpha=0.5, channel_mode='all'):
 
 def add_sticker_to_image(image_path):
     stickers_dir = "stickers"
-    stickers = [f for f in os.listdir(stickers_dir) if f.lower().endswith(('.png'))]
+    stickers = [f for f in os.listdir(stickers_dir) if f.lower().endswith('.png')]
+
     if len(stickers) == 0:
         print("No stickers found in the stickers folder.")
         return
 
+    # Load base image
     img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-    if img is None:
-        print("Image not found.")
-        return
 
-    # If image has no alpha, add one for easier overlay
+    # Ensure base image has alpha channel
     if img.shape[2] == 3:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
 
-    sticker_img = None
-    sticker_name = None
     preview_img = img.copy()
-    pos = (0, 0)
+    sticker_img = None
 
+    # Overlay function
     def overlay_sticker(base_img, sticker, pos):
         x, y = pos
         h, w = sticker.shape[:2]
+
         overlay = base_img.copy()
-        # Ensure sticker fits in image
+
         if y + h > overlay.shape[0] or x + w > overlay.shape[1]:
             return overlay
+
         alpha_s = sticker[:, :, 3] / 255.0
         alpha_l = 1.0 - alpha_s
-        for c in range(0, 3):
-            overlay[y:y+h, x:x+w, c] = (alpha_s * sticker[:, :, c] +
-                                        alpha_l * overlay[y:y+h, x:x+w, c])
+
+        for c in range(3):
+            overlay[y:y+h, x:x+w, c] = (
+                alpha_s * sticker[:, :, c] +
+                alpha_l * overlay[y:y+h, x:x+w, c]
+            )
         return overlay
 
+    # Mouse callback
     def mouse_callback(event, x, y, flags, param):
-        nonlocal preview_img, pos
+        nonlocal preview_img
         if event == cv2.EVENT_LBUTTONDOWN and sticker_img is not None:
-            pos = (x, y)
-            preview_img = overlay_sticker(img, sticker_img, (x, y))
+            updated = overlay_sticker(preview_img, sticker_img, (x, y))
+            preview_img[:] = updated  # IMPORTANT: updates actual buffer
             cv2.imshow("Add Sticker", preview_img)
 
+    # Select sticker
     while True:
-        print("\nEscolha um sticker para adicionar:")
-        for idx, s in enumerate(stickers[:5]):
-            print(f"{idx+1}. {s}")
-        print("0. Cancelar edição")
-        try:
-            choice = int(input("Digite o número do sticker (1-5) ou 0 para cancelar: "))
-        except ValueError:
-            print("Escolha inválida.")
-            continue
-        if choice == 0:
-            print("Edição de sticker cancelada.")
-            return
-        if 1 <= choice <= min(5, len(stickers)):
-            sticker_name = stickers[choice-1]
-            sticker_img = cv2.imread(os.path.join(stickers_dir, sticker_name), cv2.IMREAD_UNCHANGED)
-            if sticker_img is None or sticker_img.shape[2] != 4:
-                print("Sticker inválido (precisa ter canal alfa).")
-                continue
-            break
-        else:
-            print("Escolha inválida.")
+        print("\nChoose a sticker:")
+        for i, s in enumerate(stickers[:5]):
+            print(f"{i+1}. {s}")
+        print("0. Cancel")
 
-    print("Clique na imagem para posicionar o sticker. Pressione 's' para salvar, 'r' para escolher outro sticker, ou 'q' para cancelar.")
-    preview_img = img.copy()
+        try:
+            choice = int(input("Your choice: "))
+        except:
+            continue
+
+        if choice == 0:
+            print("Cancelled.")
+            return
+
+        if 1 <= choice <= min(5, len(stickers)):
+            sticker_file = stickers[choice - 1]
+            sticker_img = cv2.imread(os.path.join(stickers_dir, sticker_file), cv2.IMREAD_UNCHANGED)
+
+            if sticker_img is None or sticker_img.shape[2] != 4:
+                print("Sticker must be a PNG with transparency.")
+                continue
+
+            break
+
+        print("Invalid choice.")
+
+    # Interaction loop
+    print("Click to place stickers.")
+    print("Press S to save, Q to cancel.")
+
     cv2.namedWindow("Add Sticker")
     cv2.setMouseCallback("Add Sticker", mouse_callback)
     cv2.imshow("Add Sticker", preview_img)
 
     while True:
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('s'):
-            # Salvar imagem editada
+
+        if key == ord('s'):  # save
             cv2.destroyAllWindows()
-            save_edited_image(preview_img, image_path)
+            final_img = cv2.cvtColor(preview_img, cv2.COLOR_BGRA2BGR)
+            save_edited_image(final_img, image_path)
             break
-        elif key == ord('r'):
-            # Reescolher sticker
+
+        elif key == ord('q'):  # quit without saving
             cv2.destroyAllWindows()
-            add_sticker_to_image(image_path)
-            break
-        elif key == ord('q'):
-            cv2.destroyAllWindows()
-            print("Edição de sticker cancelada.")
+            print("Cancelled without saving.")
             break
 
 while True:
-    print("\nSelecione o modo de canal para aplicar os filtros:")
-    print("1. Imagem inteira (RGB)")
-    print("2. Escala de cinza (Grayscale)")
-    print("3. Apenas canal Vermelho (R)")
-    print("4. Apenas canal Verde (G)")
-    print("5. Apenas canal Azul (B)")
-    channel_option = input("Escolha uma opção (1-5): ")
+    print("\nSelect the channel mode to apply filters:")
+    print("1. Whole image (RGB)")
+    print("2. Grayscale")
+    print("3. Red channel only (R)")
+    print("4. Green channel only (G)")
+    print("5. Blue channel only (B)")
+    channel_option = input("Choose an option (1-5): ")
 
     if channel_option == '1':
         channel_mode = 'all'
@@ -377,21 +393,21 @@ while True:
     elif channel_option == '5':
         channel_mode = 'b'
     else:
-        print("Opção inválida.")
+        print("Invalid option.")
         continue
 
-    print("\nSelecione uma operação:")
+    print("\nSelect an operation:")
     print("1. Upload an image")
     print("2. Record a video from webcam")
     print("3. Play a video from file")
     print("4. Apply blur filter")
     print("5. Apply sharpness filter")
-    print("6. Apply 5channel swap filter (swap R/B ou mostrar canal)")
+    print("6. Apply channel swap filter (swap R/B or show channel)")
     print("7. Addition of two images")
     print("8. Subtraction of two images")
     print("9. Blending of two images")
     print("10. Exit")
-    print("11. Adicionar sticker a uma imagem")
+    print("11. Add sticker to an image")
 
     choice = input("Enter your choice (1-11): ")
     if choice == '1':
@@ -402,7 +418,7 @@ while True:
     elif choice == '3':
         print("Choose a video to play:")
         for file in os.listdir("resources/"):
-            if file.endswith(".mp4"):
+            if file.endswith(".mp4"):   
                 print(file)
         video_file = input("Enter the video file name: ")
         play_video(os.path.join("resources/", video_file))
@@ -509,16 +525,16 @@ while True:
     elif choice == '11':
         files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
         if files:
-            print("Imagens disponíveis para adicionar sticker:")
+            print("Available images to add sticker:")
             for file in files:
                 print(file)
-            selected_file = input("Digite o nome da imagem para adicionar sticker: ")
+            selected_file = input("Enter the image file name to add sticker: ")
             file_path = os.path.join("resources/", selected_file)
             if os.path.exists(file_path):
                 add_sticker_to_image(file_path)
             else:
-                print("Arquivo não encontrado.")
+                print("File not found.")
         else:
-            print("Nenhuma imagem encontrada na pasta resources.")
+            print("No images found in the resources folder.")
     else:
         print("Invalid option. Please enter a number between 1 and 11.")
