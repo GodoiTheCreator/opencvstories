@@ -10,7 +10,7 @@ def upload_image(file_path):
         raise ValueError("Image not found or unable to read.")
     return image
 
-def record_video():
+def record_video(interactive=True):
     video = cv2.VideoCapture(0)
     frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -33,15 +33,18 @@ def record_video():
     out.release()
     cv2.destroyAllWindows()
 
-    save = input("Do you want to save the recorded video? (y/n): ").strip().lower()
-    if save != 'y':
-        try:
-            os.remove('resources/video.mp4')
-            print("Video discarded.")
-        except Exception:
-            print("Could not remove the video file.")
+    if interactive:
+        save = input("Do you want to save the recorded video? (y/n): ").strip().lower()
+        if save != 'y':
+            try:
+                os.remove('resources/video.mp4')
+                print("Video discarded.")
+            except Exception:
+                print("Could not remove the video file.")
+        else:
+            print("Video saved as resources/video.mp4")
     else:
-        print("Video saved as resources/video.mp4")
+        return 'resources/video.mp4'
 
 def play_video(file_path):
     video = cv2.VideoCapture(file_path)
@@ -67,15 +70,18 @@ def save_edited_video(frames, file_path, fps=30):
     out.release()
     print(f"Edited video saved to {file_path}")
 
-def ask_save_and_overwrite(image_or_frames, file_path, is_video=False, fps=30):
-    save = input("Do you want to save the changes and overwrite the original file? (y/n): ").strip().lower()
-    if save == 'y':
-        if is_video:
-            save_edited_video(image_or_frames, file_path, fps)
+def ask_save_and_overwrite(image_or_frames, file_path, is_video=False, fps=30, interactive=True):
+    if interactive:
+        save = input("Do you want to save the changes and overwrite the original file? (y/n): ").strip().lower()
+        if save == 'y':
+            if is_video:
+                save_edited_video(image_or_frames, file_path, fps)
+            else:
+                save_edited_image(image_or_frames, file_path)
         else:
-            save_edited_image(image_or_frames, file_path)
+            print("Changes discarded.")
     else:
-        print("Changes discarded.")
+        pass
 
 def detect_file_type(file_path):
     img = cv2.imread(file_path)
@@ -277,6 +283,45 @@ def apply_blending(img1_path, img2_path, alpha=0.5, channel_mode='all'):
     cv2.destroyAllWindows()
     ask_save_and_overwrite(blended, img1_path)
 
+def overlay_sticker(base_img, sticker, pos):
+    x, y = pos
+    h, w = sticker.shape[:2]
+    h_base, w_base = base_img.shape[:2]
+
+    # Calculate clipping
+    x1 = max(x, 0)
+    y1 = max(y, 0)
+    x2 = min(x + w, w_base)
+    y2 = min(y + h, h_base)
+
+    # Check if sticker is completely out of bounds
+    if x1 >= x2 or y1 >= y2:
+        return base_img
+
+    # Calculate sticker offsets
+    sticker_x1 = x1 - x
+    sticker_y1 = y1 - y
+    sticker_x2 = sticker_x1 + (x2 - x1)
+    sticker_y2 = sticker_y1 + (y2 - y1)
+
+    overlay = base_img.copy()
+    
+    # Extract ROI and sticker region
+    roi = overlay[y1:y2, x1:x2]
+    sticker_crop = sticker[sticker_y1:sticker_y2, sticker_x1:sticker_x2]
+
+    alpha_s = sticker_crop[:, :, 3] / 255.0
+    alpha_l = 1.0 - alpha_s
+
+    for c in range(3):
+        roi[:, :, c] = (
+            alpha_s * sticker_crop[:, :, c] +
+            alpha_l * roi[:, :, c]
+        )
+    
+    overlay[y1:y2, x1:x2] = roi
+    return overlay
+
 def add_sticker_to_image(image_path):
     stickers_dir = "stickers"
     stickers = [f for f in os.listdir(stickers_dir) if f.lower().endswith('.png')]
@@ -294,26 +339,6 @@ def add_sticker_to_image(image_path):
 
     preview_img = img.copy()
     sticker_img = None
-
-    # Overlay function
-    def overlay_sticker(base_img, sticker, pos):
-        x, y = pos
-        h, w = sticker.shape[:2]
-
-        overlay = base_img.copy()
-
-        if y + h > overlay.shape[0] or x + w > overlay.shape[1]:
-            return overlay
-
-        alpha_s = sticker[:, :, 3] / 255.0
-        alpha_l = 1.0 - alpha_s
-
-        for c in range(3):
-            overlay[y:y+h, x:x+w, c] = (
-                alpha_s * sticker[:, :, c] +
-                alpha_l * overlay[y:y+h, x:x+w, c]
-            )
-        return overlay
 
     # Mouse callback
     def mouse_callback(event, x, y, flags, param):
@@ -373,168 +398,172 @@ def add_sticker_to_image(image_path):
             print("Cancelled without saving.")
             break
 
-while True:
-    print("\nSelect the channel mode to apply filters:")
-    print("1. Whole image (RGB)")
-    print("2. Grayscale")
-    print("3. Red channel only (R)")
-    print("4. Green channel only (G)")
-    print("5. Blue channel only (B)")
-    channel_option = input("Choose an option (1-5): ")
+def main_menu():
+    while True:
+        print("\nSelect the channel mode to apply filters:")
+        print("1. Whole image (RGB)")
+        print("2. Grayscale")
+        print("3. Red channel only (R)")
+        print("4. Green channel only (G)")
+        print("5. Blue channel only (B)")
+        channel_option = input("Choose an option (1-5): ")
 
-    if channel_option == '1':
-        channel_mode = 'all'
-    elif channel_option == '2':
-        channel_mode = 'gray'
-    elif channel_option == '3':
-        channel_mode = 'r'
-    elif channel_option == '4':
-        channel_mode = 'g'
-    elif channel_option == '5':
-        channel_mode = 'b'
-    else:
-        print("Invalid option.")
-        continue
-
-    print("\nSelect an operation:")
-    print("1. Upload an image")
-    print("2. Record a video from webcam")
-    print("3. Play a video from file")
-    print("4. Apply blur filter")
-    print("5. Apply sharpness filter")
-    print("6. Apply channel swap filter (swap R/B or show channel)")
-    print("7. Addition of two images")
-    print("8. Subtraction of two images")
-    print("9. Blending of two images")
-    print("10. Exit")
-    print("11. Add sticker to an image")
-
-    choice = input("Enter your choice (1-11): ")
-    if choice == '1':
-        image_path = input("Enter the image file path: ")
-        uploaded_image = upload_image(image_path)
-    elif choice == '2':
-        record_video()
-    elif choice == '3':
-        print("Choose a video to play:")
-        for file in os.listdir("resources/"):
-            if file.endswith(".mp4"):   
-                print(file)
-        video_file = input("Enter the video file name: ")
-        play_video(os.path.join("resources/", video_file))
-    elif choice == '4':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi", ".mov", ".mkv"))]
-        if files:
-            print("Available files for blur filter:")
-            for file in files:
-                print(file)
-            selected_file = input("Enter the file name to apply blur filter: ")
-            file_path = os.path.join("resources/", selected_file)
-            if os.path.exists(file_path):
-                apply_filter_blur(file_path, channel_mode)
-            else:
-                print("File not found.")
+        if channel_option == '1':
+            channel_mode = 'all'
+        elif channel_option == '2':
+            channel_mode = 'gray'
+        elif channel_option == '3':
+            channel_mode = 'r'
+        elif channel_option == '4':
+            channel_mode = 'g'
+        elif channel_option == '5':
+            channel_mode = 'b'
         else:
-            print("No images or videos found in resources folder.")
-    elif choice == '5':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi", ".mov", ".mkv"))]
-        if files:
-            print("Available files for sharpness filter:")
-            for file in files:
-                print(file)
-            selected_file = input("Enter the file name to apply sharpness filter: ")
-            file_path = os.path.join("resources/", selected_file)
-            if os.path.exists(file_path):
-                apply_filter_sharpness(file_path, channel_mode)
-            else:
-                print("File not found.")
-        else:
-            print("No images or videos found in resources folder.")
-    elif choice == '6':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi", ".mov", ".mkv"))]
-        if files:
-            print("Available files for channel swap/filter:")
-            for file in files:
-                print(file)
-            selected_file = input("Enter the file name to apply channel swap/filter: ")
-            file_path = os.path.join("resources/", selected_file)
-            if os.path.exists(file_path):
-                if channel_mode == 'all':
-                    apply_channel_swapl(file_path, 'swap')
+            print("Invalid option.")
+            continue
+
+        print("\nSelect an operation:")
+        print("1. Upload an image")
+        print("2. Record a video from webcam")
+        print("3. Play a video from file")
+        print("4. Apply blur filter")
+        print("5. Apply sharpness filter")
+        print("6. Apply channel swap filter (swap R/B or show channel)")
+        print("7. Addition of two images")
+        print("8. Subtraction of two images")
+        print("9. Blending of two images")
+        print("10. Exit")
+        print("11. Add sticker to an image")
+
+        choice = input("Enter your choice (1-11): ")
+        if choice == '1':
+            image_path = input("Enter the image file path: ")
+            uploaded_image = upload_image(image_path)
+        elif choice == '2':
+            record_video()
+        elif choice == '3':
+            print("Choose a video to play:")
+            for file in os.listdir("resources/"):
+                if file.endswith(".mp4"):   
+                    print(file)
+            video_file = input("Enter the video file name: ")
+            play_video(os.path.join("resources/", video_file))
+        elif choice == '4':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi", ".mov", ".mkv"))]
+            if files:
+                print("Available files for blur filter:")
+                for file in files:
+                    print(file)
+                selected_file = input("Enter the file name to apply blur filter: ")
+                file_path = os.path.join("resources/", selected_file)
+                if os.path.exists(file_path):
+                    apply_filter_blur(file_path, channel_mode)
                 else:
-                    apply_channel_swapl(file_path, channel_mode)
+                    print("File not found.")
             else:
-                print("File not found.")
-        else:
-            print("No images or videos found in resources folder.")
-    elif choice == '7':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
-        if len(files) >= 2:
-            print("Available images for addition:")
-            for file in files:
-                print(file)
-            img1 = input("Enter the first image file name: ")
-            img2 = input("Enter the second image file name: ")
-            img1_path = os.path.join("resources/", img1)
-            img2_path = os.path.join("resources/", img2)
-            if os.path.exists(img1_path) and os.path.exists(img2_path):
-                apply_addition(img1_path, img2_path, channel_mode)
+                print("No images or videos found in resources folder.")
+        elif choice == '5':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi", ".mov", ".mkv"))]
+            if files:
+                print("Available files for sharpness filter:")
+                for file in files:
+                    print(file)
+                selected_file = input("Enter the file name to apply sharpness filter: ")
+                file_path = os.path.join("resources/", selected_file)
+                if os.path.exists(file_path):
+                    apply_filter_sharpness(file_path, channel_mode)
+                else:
+                    print("File not found.")
             else:
-                print("One or both files not found.")
-        else:
-            print("Not enough images in resources folder.")
-    elif choice == '8':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
-        if len(files) >= 2:
-            print("Available images for subtraction:")
-            for file in files:
-                print(file)
-            img1 = input("Enter the first image file name: ")
-            img2 = input("Enter the second image file name: ")
-            img1_path = os.path.join("resources/", img1)
-            img2_path = os.path.join("resources/", img2)
-            if os.path.exists(img1_path) and os.path.exists(img2_path):
-                apply_subtract(img1_path, img2_path, channel_mode)
+                print("No images or videos found in resources folder.")
+        elif choice == '6':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi", ".mov", ".mkv"))]
+            if files:
+                print("Available files for channel swap/filter:")
+                for file in files:
+                    print(file)
+                selected_file = input("Enter the file name to apply channel swap/filter: ")
+                file_path = os.path.join("resources/", selected_file)
+                if os.path.exists(file_path):
+                    if channel_mode == 'all':
+                        apply_channel_swapl(file_path, 'swap')
+                    else:
+                        apply_channel_swapl(file_path, channel_mode)
+                else:
+                    print("File not found.")
             else:
-                print("One or both files not found.")
-        else:
-            print("Not enough images in resources folder.")
-    elif choice == '9':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
-        if len(files) >= 2:
-            print("Available images for blending:")
-            for file in files:
-                print(file)
-            img1 = input("Enter the first image file name: ")
-            img2 = input("Enter the second image file name: ")
-            try:
-                alpha = float(input("Enter alpha value for blending (0.0 to 1.0, default 0.5): ") or "0.5")
-            except ValueError:
-                alpha = 0.5
-            img1_path = os.path.join("resources/", img1)
-            img2_path = os.path.join("resources/", img2)
-            if os.path.exists(img1_path) and os.path.exists(img2_path):
-                apply_blending(img1_path, img2_path, alpha, channel_mode)
+                print("No images or videos found in resources folder.")
+        elif choice == '7':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
+            if len(files) >= 2:
+                print("Available images for addition:")
+                for file in files:
+                    print(file)
+                img1 = input("Enter the first image file name: ")
+                img2 = input("Enter the second image file name: ")
+                img1_path = os.path.join("resources/", img1)
+                img2_path = os.path.join("resources/", img2)
+                if os.path.exists(img1_path) and os.path.exists(img2_path):
+                    apply_addition(img1_path, img2_path, channel_mode)
+                else:
+                    print("One or both files not found.")
             else:
-                print("One or both files not found.")
-        else:
-            print("Not enough images in resources folder.")
-    elif choice == '10':
-        print("Exiting the program.")
-        break
-    elif choice == '11':
-        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
-        if files:
-            print("Available images to add sticker:")
-            for file in files:
-                print(file)
-            selected_file = input("Enter the image file name to add sticker: ")
-            file_path = os.path.join("resources/", selected_file)
-            if os.path.exists(file_path):
-                add_sticker_to_image(file_path)
+                print("Not enough images in resources folder.")
+        elif choice == '8':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
+            if len(files) >= 2:
+                print("Available images for subtraction:")
+                for file in files:
+                    print(file)
+                img1 = input("Enter the first image file name: ")
+                img2 = input("Enter the second image file name: ")
+                img1_path = os.path.join("resources/", img1)
+                img2_path = os.path.join("resources/", img2)
+                if os.path.exists(img1_path) and os.path.exists(img2_path):
+                    apply_subtract(img1_path, img2_path, channel_mode)
+                else:
+                    print("One or both files not found.")
             else:
-                print("File not found.")
+                print("Not enough images in resources folder.")
+        elif choice == '9':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
+            if len(files) >= 2:
+                print("Available images for blending:")
+                for file in files:
+                    print(file)
+                img1 = input("Enter the first image file name: ")
+                img2 = input("Enter the second image file name: ")
+                try:
+                    alpha = float(input("Enter alpha value for blending (0.0 to 1.0, default 0.5): ") or "0.5")
+                except ValueError:
+                    alpha = 0.5
+                img1_path = os.path.join("resources/", img1)
+                img2_path = os.path.join("resources/", img2)
+                if os.path.exists(img1_path) and os.path.exists(img2_path):
+                    apply_blending(img1_path, img2_path, alpha, channel_mode)
+                else:
+                    print("One or both files not found.")
+            else:
+                print("Not enough images in resources folder.")
+        elif choice == '10':
+            print("Exiting the program.")
+            break
+        elif choice == '11':
+            files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
+            if files:
+                print("Available images to add sticker:")
+                for file in files:
+                    print(file)
+                selected_file = input("Enter the image file name to add sticker: ")
+                file_path = os.path.join("resources/", selected_file)
+                if os.path.exists(file_path):
+                    add_sticker_to_image(file_path)
+                else:
+                    print("File not found.")
+            else:
+                print("No images found in the resources folder.")
         else:
-            print("No images found in the resources folder.")
-    else:
-        print("Invalid option. Please enter a number between 1 and 11.")
+            print("Invalid option. Please enter a number between 1 and 11.")
+
+if __name__ == "__main__":
+    main_menu()
