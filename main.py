@@ -269,6 +269,94 @@ def apply_blending(img1_path, img2_path, alpha=0.5, channel_mode='all'):
     cv2.destroyAllWindows()
     ask_save_and_overwrite(blended, img1_path)
 
+def add_sticker_to_image(image_path):
+    stickers_dir = "stickers"
+    stickers = [f for f in os.listdir(stickers_dir) if f.lower().endswith(('.png'))]
+    if len(stickers) == 0:
+        print("No stickers found in the stickers folder.")
+        return
+
+    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        print("Image not found.")
+        return
+
+    # If image has no alpha, add one for easier overlay
+    if img.shape[2] == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+
+    sticker_img = None
+    sticker_name = None
+    preview_img = img.copy()
+    pos = (0, 0)
+
+    def overlay_sticker(base_img, sticker, pos):
+        x, y = pos
+        h, w = sticker.shape[:2]
+        overlay = base_img.copy()
+        # Ensure sticker fits in image
+        if y + h > overlay.shape[0] or x + w > overlay.shape[1]:
+            return overlay
+        alpha_s = sticker[:, :, 3] / 255.0
+        alpha_l = 1.0 - alpha_s
+        for c in range(0, 3):
+            overlay[y:y+h, x:x+w, c] = (alpha_s * sticker[:, :, c] +
+                                        alpha_l * overlay[y:y+h, x:x+w, c])
+        return overlay
+
+    def mouse_callback(event, x, y, flags, param):
+        nonlocal preview_img, pos
+        if event == cv2.EVENT_LBUTTONDOWN and sticker_img is not None:
+            pos = (x, y)
+            preview_img = overlay_sticker(img, sticker_img, (x, y))
+            cv2.imshow("Add Sticker", preview_img)
+
+    while True:
+        print("\nEscolha um sticker para adicionar:")
+        for idx, s in enumerate(stickers[:5]):
+            print(f"{idx+1}. {s}")
+        print("0. Cancelar edição")
+        try:
+            choice = int(input("Digite o número do sticker (1-5) ou 0 para cancelar: "))
+        except ValueError:
+            print("Escolha inválida.")
+            continue
+        if choice == 0:
+            print("Edição de sticker cancelada.")
+            return
+        if 1 <= choice <= min(5, len(stickers)):
+            sticker_name = stickers[choice-1]
+            sticker_img = cv2.imread(os.path.join(stickers_dir, sticker_name), cv2.IMREAD_UNCHANGED)
+            if sticker_img is None or sticker_img.shape[2] != 4:
+                print("Sticker inválido (precisa ter canal alfa).")
+                continue
+            break
+        else:
+            print("Escolha inválida.")
+
+    print("Clique na imagem para posicionar o sticker. Pressione 's' para salvar, 'r' para escolher outro sticker, ou 'q' para cancelar.")
+    preview_img = img.copy()
+    cv2.namedWindow("Add Sticker")
+    cv2.setMouseCallback("Add Sticker", mouse_callback)
+    cv2.imshow("Add Sticker", preview_img)
+
+    while True:
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('s'):
+            # Salvar imagem editada
+            cv2.destroyAllWindows()
+            save_edited_image(preview_img, image_path)
+            break
+        elif key == ord('r'):
+            # Reescolher sticker
+            cv2.destroyAllWindows()
+            add_sticker_to_image(image_path)
+            break
+        elif key == ord('q'):
+            cv2.destroyAllWindows()
+            print("Edição de sticker cancelada.")
+            break
+
 while True:
     print("\nSelecione o modo de canal para aplicar os filtros:")
     print("1. Imagem inteira (RGB)")
@@ -303,8 +391,9 @@ while True:
     print("8. Subtraction of two images")
     print("9. Blending of two images")
     print("10. Exit")
+    print("11. Adicionar sticker a uma imagem")
 
-    choice = input("Enter your choice (1-10): ")
+    choice = input("Enter your choice (1-11): ")
     if choice == '1':
         image_path = input("Enter the image file path: ")
         uploaded_image = upload_image(image_path)
@@ -417,5 +506,19 @@ while True:
     elif choice == '10':
         print("Exiting the program.")
         break
+    elif choice == '11':
+        files = [file for file in os.listdir("resources/") if file.lower().endswith((".jpg", ".jpeg", ".png"))]
+        if files:
+            print("Imagens disponíveis para adicionar sticker:")
+            for file in files:
+                print(file)
+            selected_file = input("Digite o nome da imagem para adicionar sticker: ")
+            file_path = os.path.join("resources/", selected_file)
+            if os.path.exists(file_path):
+                add_sticker_to_image(file_path)
+            else:
+                print("Arquivo não encontrado.")
+        else:
+            print("Nenhuma imagem encontrada na pasta resources.")
     else:
-        print("Invalid option. Please enter a number between 1 and 10.")
+        print("Invalid option. Please enter a number between 1 and 11.")
